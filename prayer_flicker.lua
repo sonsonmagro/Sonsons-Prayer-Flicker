@@ -1,3 +1,16 @@
+---@version 1.0.1
+--[[
+    File: praye_flicker.lua
+    Description: This class is designed for dynamic prayer switching based on various threat types
+    Author: Sonson
+    
+    Changelog:
+    - V.1.0.1:
+        - Added PrayerFlicker:deactivatePrayer()
+        - update() and & _switchPrayer() now return true when prayer is switched
+    - V.1.0.0: 
+        -Initial release
+]]
 ---@class PrayerFlicker
 ---@field config PrayerFlickerConfig
 ---@field state PrayerFlickerState
@@ -261,29 +274,57 @@ end
 
 ---@private
 ---@param prayer Prayer
+---@return boolean
 function PrayerFlicker:_switchPrayer(prayer)
-    if not prayer then return end
+    if not prayer then return false end
     local currentPrayer = self:_getCurrentPrayer()
 
     -- check if prayer in use
     if (self.state.activePrayer.buffId == prayer.buffId and self.state.lastPrayerTick + 4 > API.Get_tick()) or (currentPrayer.buffId == prayer.buffId) then
-        return
+        return false
     end
 
     -- flick prayer
     local success = API.DoAction_Ability(
         prayer.name,
         1,
-        API.OFF_ACT_GeneralInterface_route, true
+        API.OFF_ACT_GeneralInterface_route,
+        true
     )
 
     if success then
         self.state.lastPrayerTick = API.Get_tick()
         self.state.activePrayer = prayer
     end
+
+    return success
+end
+
+---disables active prayer or selected prayer
+---@param prayer Prayer optional if you want to turn off a specific prayer
+---@return boolean
+function PrayerFlicker:deactivatePrayer(prayer)
+    prayer = prayer or self:_getCurrentPrayer()
+    if not prayer then return false end
+
+    local success = API.DoAction_Ability(
+        prayer.name,
+        1,
+        API.OFF_ACT_GeneralInterface_route,
+        true
+    )
+
+    if success then
+        self.state.lastPrayerTick = API.Get_tick()
+        ---@diagnostic disable-next-line
+        self.state.activePrayer = {}
+    end
+
+    return success
 end
 
 ---updates PrayerFlicker instance
+---@return boolean
 function PrayerFlicker:update()
     local currentTick = API.Get_tick()
     local requiredPrayer = self:_determineActivePrayer(currentTick)
@@ -291,7 +332,8 @@ function PrayerFlicker:update()
     self:_scanProjectiles(currentTick)
     self:_scanAnimations(currentTick)
     self:_cleanupPendingActions(currentTick)
-    self:_switchPrayer(requiredPrayer)
+
+    return self:_switchPrayer(requiredPrayer)
 end
 
 ---can use with API.DrawTable(PrayerFlicker:tracking()) to check metrics
