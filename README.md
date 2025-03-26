@@ -29,7 +29,7 @@ This class is designed for dynamic prayer switching based on various threat type
 - Configurable priority-based prayer management
 
 ## TODO
-- Method to disable prayers
+- Check for prayers on ability bar when initializing a new instance
 ---
 ## Usage
 
