@@ -13,11 +13,11 @@ This class is designed for dynamic prayer switching based on various threat type
 ## Usage
 
 ### Save File
-Make sure to save `Sonsons-Prayer-Flicker` in your `Lua_Scripts` folder.
+Make sure to save `prayer_flicker` in your `Lua_Scripts` folder.
 
 ### Import the Class
 ```lua
-local PrayerFlicker = require("Sonsons-Prayer-Flicker")
+local PrayerFlicker = require("prayer_flicker")
 ```
 
 ### Configuration Details
