@@ -12,11 +12,31 @@ This class is designed for dynamic prayer switching based on various threat type
 
 ## Usage
 
+### Save File
+Make sure to save `Sonsons-Prayer-Flicker` in your `Lua_Scripts` folder.
+
+### Import the Class
+```lua
+local PrayerFlicker = require("Sonsons-Prayer-Flicker")
+```
+
 ### Configuration Details
 
-**A. NPCs and animations**
+#### A. Available Prayers
+Define the prayers you'll use:
 ```lua
-npcs = {
+local prayers = {
+    { name = "Soul Split", buffId = 26033 },
+    { name = "Deflect Melee", buffId = 26040 },
+    { name = "Deflect Magic", buffId = 26041 },
+    { name = "Deflect Ranged", buffId = 26044 },
+    { name = "Deflect Necromancy", buffId = 30745 }
+}
+```
+
+#### B. NPCs and Animations
+```lua
+local npcs = {
     {
         id = 123,  -- npc id
         animations = {
@@ -27,7 +47,7 @@ npcs = {
                     buffId = 26041
                 },
                 activationDelay = 1,  -- delay before prayer switch (in game ticks)
-                duration = 3,         -- no. of game ticks to keep prayer active (useful if you have lingering damage i.e. zammy twinshot)
+                duration = 3,         -- no. of game ticks to keep prayer active
                 priority = 10         -- threat priority: bigger numbers get priority
             }
         }
@@ -35,9 +55,9 @@ npcs = {
 }
 ```
 
-**B. Projectiles Configuration**
+#### C. Projectiles Configuration
 ```lua
-projectiles = {
+local projectiles = {
     {
         id = 789,                     -- projectile id
         prayer = {
@@ -48,15 +68,15 @@ projectiles = {
             return isDivertActive() or isResonanceActive()
         end,
         activationDelay = 0,          -- delay before prayer switch (in game ticks)
-        duration = 2,                 -- no. of game ticks to keep prayer active (useful if you have lingering damage i.e. zammy twinshot) 
+        duration = 2,                 -- no. of game ticks to keep prayer active
         priority = 5                  -- threat priority: bigger numbers get priority
     }
 }
 ```
 
-**C. Conditionals Configuration**
+#### D. Conditionals Configuration
 ```lua
-conditionals = {
+local conditionals = {
     {
         condition = function()         -- custom condition function
             return isNearChaosTrap()
@@ -70,42 +90,33 @@ conditionals = {
 }
 ```
 
-### Configuration Tips
-- `prayer`: 'name' needs to be an exact match to ability bar & 'buffId' needs to match the buffBar id
-- `bypassCondition`: Optional function to skip threat
-- `activationDelay`: Helps sync prayer with mechanics (useful if there's a delay between animation and hitsplat)
-- `duration`: Controls how long threat is considered active
-- `priority`: Determines which prayer gets switched to first
-
-**Example Full Configuration**
+### Create PrayerFlicker Instance
 ```lua
 local config = {
     defaultPrayer = { name = "Soul Split", buffId = 26033 },
-    prayers = { ... },
-    projectiles = { ... },
-    npcs = { ... },
-    conditionals = { ... }
+    prayers = prayers,
+    projectiles = projectiles,
+    npcs = npcs,
+    conditionals = conditionals
 }
-```
----
 
-### Initialization
-
-```lua
-local PrayerFlicker = require("Sonsons-Prayer-Flicker")
-
---create a new instance of PrayerFlicker 
 local prayerFlicker = PrayerFlicker.new(config)
 ```
 
-### Update Method
-4. Call `update()` in your main script loop to manage prayer switching:
+### Update in Main Loop
 ```lua
---example main loop
 while API.Read_LoopyLoop() do
     if atBoss() then
-        prayerFlicker:update() --updates your instance and manages your overhead prayers
+        prayerFlicker:update() -- manages overhead prayers
     end
     API.RandomSleep2(100, 30, 20)
 end
 ```
+
+## Configuration Tips
+- `prayer`: `name` must match ability bar & `buffId` must match buffBar id
+- `bypassCondition`: Optional function to skip threat
+- `activationDelay`: Syncs prayer with game mechanics
+- `duration`: Controls threat active time
+- `priority`: Determines prayer switching order
+- It's okay to set `conditionals = {}` if you don't have any, same applies to `npcs` and `projectiles`
