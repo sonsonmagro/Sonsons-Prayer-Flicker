@@ -309,7 +309,7 @@ end
 ---@return boolean
 function PrayerFlicker:deactivatePrayer(prayer)
     prayer = prayer or self:_getCurrentPrayer()
-    if not prayer then return false end
+    if not prayer.name then return false end
 
     local success = API.DoAction_Ability(
         prayer.name,
