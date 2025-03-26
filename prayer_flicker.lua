@@ -115,7 +115,8 @@ function PrayerFlicker.new(config)
     }
 
     self.state = {
-        activePrayer = { name = "", buffId = 0 },
+        ---@diagnostic disable-next-line
+        activePrayer = {},
         lastPrayerTick = 0,
         pendingActions = {}
     }
