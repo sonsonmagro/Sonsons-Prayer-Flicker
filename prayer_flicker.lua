@@ -8,8 +8,12 @@
     - V.1.0.1:
         - Added PrayerFlicker:deactivatePrayer()
         - update() and & _switchPrayer() now return true when prayer is switched
+
     - V.1.0.0: 
         -Initial release
+
+    TODO:
+    -
 ]]
 ---@class PrayerFlicker
 ---@field config PrayerFlickerConfig
