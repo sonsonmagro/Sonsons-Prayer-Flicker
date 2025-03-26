@@ -15,6 +15,13 @@ This class is designed for dynamic prayer switching based on various threat type
 - Easy to configure for different boss fights and combat scenarios
 
 ## Changelog
+### v1.0.2
+- Fixes and improvements to conditional threat detection
+
+### v1.0.1
+- Added a method to deactivate prayers: `PrayerFlicker:deactivatePrayer()`
+- `update()` and `_switchPrayer()` now return true when prayer is changed
+
 ### v1.0.0 - Initial Release
 - Initial release of Sonson's Prayer Flicker
 - Core prayer switching mechanics implemented
