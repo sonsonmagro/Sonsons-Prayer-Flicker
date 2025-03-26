@@ -1,15 +1,18 @@
----@version 1.0.1
+---@version 1.0.2
 --[[
     File: praye_flicker.lua
     Description: This class is designed for dynamic prayer switching based on various threat types
     Author: Sonson
-    
+
     Changelog:
-    - V.1.0.1:
+    - v1.0.2 : 
+        - Fixes and improvements to conditional threat detection
+
+    - v1.0.1:
         - Added PrayerFlicker:deactivatePrayer()
         - update() and & _switchPrayer() now return true when prayer is switched
 
-    - V.1.0.0: 
+    - v1.0.0:
         -Initial release
 
     TODO:
@@ -61,13 +64,14 @@ PrayerFlicker.__index = PrayerFlicker
 ---@field condition fun(): boolean
 ---@field prayer Prayer
 ---@field priority number
+---@field duration number
 
 ---@class PrayerFlickerState
 ---@field activePrayer Prayer
 ---@field lastPrayerTick number
 ---@field pendingActions Threat[]
 
----@class Threat 
+---@class Threat
 ---@field type threatType
 ---@field projId projectileId
 ---@field animId animationId
@@ -92,7 +96,7 @@ PrayerFlicker.__index = PrayerFlicker
 local API = require("api")
 
 ---creates a new PrayerFlicker instance
----@param config PrayerFlickerConfig    
+---@param config PrayerFlickerConfig
 ---@return PrayerFlicker
 function PrayerFlicker.new(config)
     local self = setmetatable({}, PrayerFlicker)
@@ -103,10 +107,10 @@ function PrayerFlicker.new(config)
             buffId = 26033
         },
         prayers = {
-            { name = "Soul Split", buffId = 26033 },
-            { name = "Deflect Melee", buffId = 26040 },
-            { name = "Deflect Magic", buffId = 26041 },
-            { name = "Deflect Ranged", buffId = 26044 },
+            { name = "Soul Split",         buffId = 26033 },
+            { name = "Deflect Melee",      buffId = 26040 },
+            { name = "Deflect Magic",      buffId = 26041 },
+            { name = "Deflect Ranged",     buffId = 26044 },
             { name = "Deflect Necromancy", buffId = 30745 }
         },
         projectiles = {},
@@ -141,7 +145,7 @@ end
 ---@param projectileId projectileId
 ---@return boolean
 function PrayerFlicker:_projectileExists(projectileId)
-    local projectiles = API.GetAllObjArray1({projectileId}, 60, {5})
+    local projectiles = API.GetAllObjArray1({ projectileId }, 60, { 5 })
     return #projectiles > 0
 end
 
@@ -151,7 +155,7 @@ end
 ---@param animId animationId
 ---@return boolean
 function PrayerFlicker:_animationExists(npcId, animId)
-    local npcs = API.GetAllObjArray1({npcId}, 60, {1})
+    local npcs = API.GetAllObjArray1({ npcId }, 60, { 1 })
     for _, npc in ipairs(npcs) do
         if npc.Id and npc.Anim == animId then return true end
     end
@@ -165,6 +169,7 @@ end
 function PrayerFlicker:_conditionalThreatExists(condFn)
     return condFn()
 end
+
 --#endregion
 
 --#region threat scans
@@ -193,7 +198,7 @@ end
 ---@param currentTick gameTick
 function PrayerFlicker:_scanAnimations(currentTick)
     for _, npc in ipairs(self.config.npcs) do
-        local npcs = API.GetAllObjArray1({npc.id}, 60, {1})
+        local npcs = API.GetAllObjArray1({ npc.id }, 60, { 1 })
 
         for _, npcObj in ipairs(npcs) do
             if npcObj.Id then
@@ -227,11 +232,12 @@ function PrayerFlicker:_scanConditionals(currentTick)
                 prayer = cond.prayer,
                 priority = cond.priority,
                 activateTick = currentTick,
-                expireTick = currentTick + 1
+                expireTick = currentTick + cond.duration
             })
         end
     end
 end
+
 --#endregion
 
 ---cleans up self.state.pendingActions, keeping only active threats
@@ -245,7 +251,7 @@ function PrayerFlicker:_cleanupPendingActions(currentTick)
         if action.expireTick <= currentTick then
             table.remove(self.state.pendingActions, i)
 
-        -- remove if threat no longer exists and not active
+            -- remove if threat no longer exists and not active
         elseif action.activateTick > currentTick then
             if action.type == "projectile" and not self:_projectileExists(action.projId) then
                 table.remove(self.state.pendingActions, i)
@@ -264,7 +270,7 @@ end
 ---@return Prayer
 function PrayerFlicker:_determineActivePrayer(currentTick)
     -- sort threats by priority (highest first)
-    table.sort(self.state.pendingActions, function(a, b) 
+    table.sort(self.state.pendingActions, function(a, b)
         return (a.priority or 0) > (b.priority or 0)
     end)
 
@@ -309,8 +315,9 @@ end
 ---@param prayer Prayer optional if you want to turn off a specific prayer
 ---@return boolean
 function PrayerFlicker:deactivatePrayer(prayer)
+    local currentTick = API.Get_tick()
     prayer = prayer or self:_getCurrentPrayer()
-    if not prayer.name then return false end
+    if not prayer.name or (currentTick <= self.state.lastPrayerTick and not self.state.activePrayer.name) then return false end
 
     local success = API.DoAction_Ability(
         prayer.name,
@@ -336,6 +343,7 @@ function PrayerFlicker:update()
 
     self:_scanProjectiles(currentTick)
     self:_scanAnimations(currentTick)
+    self:_scanConditionals(currentTick)
     self:_cleanupPendingActions(currentTick)
 
     return self:_switchPrayer(requiredPrayer)
@@ -345,11 +353,11 @@ end
 ---@return table
 function PrayerFlicker:tracking()
     local metrics = {
-        {"Prayer Flicker:", ""},
-        {"- Prayers:"},
-        {"-- Active", self:_getCurrentPrayer() and self:_getCurrentPrayer().name or "None"},
-        {"-- Last Used", self.state.activePrayer.name or "None"},
-        {"-- Required", self:_determineActivePrayer(API.Get_tick()).name},
+        { "Prayer Flicker:", "" },
+        { "- Prayers:", ""},
+        { "-- Active",       self:_getCurrentPrayer() and self:_getCurrentPrayer().name or "None" },
+        { "-- Last Used",    self.state.activePrayer and self.state.activePrayer.name or "None" },
+        { "-- Required",     self:_determineActivePrayer(API.Get_tick()).name },
     }
     return metrics
 end
