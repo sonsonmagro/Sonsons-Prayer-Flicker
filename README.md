@@ -4,12 +4,26 @@
 This class is designed for dynamic prayer switching based on various threat types.
 
 ## Features
-- Automatic prayer switching
-- Multiple threat detection types:
-  - Projectiles
+- Automatic prayer switching based on multiple threat detection methods
+- Dynamic threat prioritization
+- Configurable prayer management for:
   - NPC Animations
-  - Conditional Threats
+  - Projectile Threats
+  - Conditional Game States
+- Customizable threat detection and prayer switching
+- Minimal performance overhead
+- Easy to configure for different boss fights and combat scenarios
 
+## Changelog
+### v1.0.0 - Initial Release
+- Initial release of Sonson's Prayer Flicker
+- Core prayer switching mechanics implemented
+- Support for NPC, Projectile, and Conditional threat detection
+- Configurable priority-based prayer management
+
+## TODO
+- Method to disable prayers
+---
 ## Usage
 
 ### Save File
@@ -108,7 +122,10 @@ local prayerFlicker = PrayerFlicker.new(config)
 while API.Read_LoopyLoop() do
     if atBoss() then
         prayerFlicker:update() -- manages overhead prayers
+    else
+        prayerFlicker:deactivatePrayer()
     end
+
     API.RandomSleep2(100, 30, 20)
 end
 ```
