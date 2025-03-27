@@ -1,11 +1,15 @@
----@version 1.0.2
+---@version 1.0.3
 --[[
-    File: praye_flicker.lua
+    File: prayer_flicker.lua
     Description: This class is designed for dynamic prayer switching based on various threat types
     Author: Sonson
 
     Changelog:
-    - v1.0.2 : 
+    - v1.0.3:
+        - Added bypass condition to NPCs and Conditional threats
+        - Fixed bypass condition luaCATS annotation
+
+    - v1.0.2 :
         - Fixes and improvements to conditional threat detection
 
     - v1.0.1:
@@ -16,7 +20,7 @@
         -Initial release
 
     TODO:
-    -
+    - Check for prayers on ability bars when initializing a new PrayerFlicker instance
 ]]
 ---@class PrayerFlicker
 ---@field config PrayerFlickerConfig
@@ -30,7 +34,6 @@ PrayerFlicker.__index = PrayerFlicker
 ---@field buffId number
 
 ---@class PrayerFlickerConfig
----@field prioritizeProjectiles boolean
 ---@field defaultPrayer Prayer
 ---@field prayers Prayer[]
 ---@field projectiles Projectile[]
@@ -41,7 +44,7 @@ PrayerFlicker.__index = PrayerFlicker
 ---@class Projectile
 ---@field id projectileId
 ---@field prayer Prayer
----@field bypassCondition fun(): boolean
+---@field bypassCondition nil | fun(): boolean
 ---@field priority number
 ---@field activationDelay number
 ---@field duration number
@@ -56,12 +59,14 @@ PrayerFlicker.__index = PrayerFlicker
 ---@field animId animationId
 ---@field prayer Prayer
 ---@field activationDelay number
+---@field bypassCondition nil | fun(): boolean
 ---@field duration number
 ---@field priority number
 
 ---conditional threat data
 ---@class Conditional
 ---@field condition fun(): boolean
+---@field bypassCondition nil | fun(): boolean
 ---@field prayer Prayer
 ---@field priority number
 ---@field duration number
@@ -82,10 +87,10 @@ PrayerFlicker.__index = PrayerFlicker
 ---@field activateTick gameTick
 ---@field expireTick gameTick
 
----@enum threatType
----| "'projectile'"
----| "'animation'"
----| "'conditional'"
+---@alias threatType
+---| "projectile"
+---| "animation"
+---| "conditional"
 
 ---@alias gameTick number
 ---@alias projectileId number
@@ -100,8 +105,18 @@ local API = require("api")
 ---@return PrayerFlicker
 function PrayerFlicker.new(config)
     local self = setmetatable({}, PrayerFlicker)
+    -- terminate if no config
+    if not config then
+        print("[PRAYER_FLICKER]: You need to provide a configuration list when creating initializing.")
+        print("[PRAYER_FLICKER]: Terminating your session.")
+        API.Write_LoopyLoop(false)
+    end
 
-    self.config = config or {
+    self.config = config
+
+--[[
+    an example config would look something like this
+    {
         defaultPrayer = {
             name = "Soul Split",
             buffId = 26033
@@ -111,13 +126,61 @@ function PrayerFlicker.new(config)
             { name = "Deflect Melee",      buffId = 26040 },
             { name = "Deflect Magic",      buffId = 26041 },
             { name = "Deflect Ranged",     buffId = 26044 },
-            { name = "Deflect Necromancy", buffId = 30745 }
         },
-        projectiles = {},
-        npcs = {},
-        conditionals = {}
+        projectiles = {
+            {
+                id = 7714,
+                prayer = Constants.CURSES.DEFLECT_RANGED,
+                bypassCondition = function() return Utils.isDivertActive() end,
+                priority = 2,
+                activationDelay = 1,
+                duration = 1
+            },
+            {
+                id = 7718,
+                prayer = Constants.CURSES.DEFLECT_MAGIC,
+                bypassCondition = function() return Utils.isDivertActive() or Utils.isEdictAnimationActive() end,
+                priority = 1,
+                activationDelay = 1,
+                duration = 1
+            }
+        },
+        npcs = {
+            {
+                id = Constants.NPCS.ZAMORAK.ID,
+                animations = {
+                    {
+                        animId = Constants.NPCS.ZAMORAK.ANIMATIONS.MELEE_ATTACK,
+                        prayer = Constants.CURSES.DEFLECT_MELEE,
+                        activationDelay = 2,
+                        duration = 4,
+                        priority = 100
+                    }
+                }
+            },
+            {
+                id = Constants.NPCS.CHAOS_WITCH.ID,
+                animations = {
+                    {
+                        animId = Constants.NPCS.CHAOS_WITCH.ANIMATIONS.MAGIC_ATTACK,
+                        prayer = Constants.CURSES.DEFLECT_MAGIC,
+                        activationDelay = 0,
+                        duration = 2,
+                        priority = 1
+                    }
+                }
+            }
+        },
+        conditionals = {
+            {
+                condition = function() return isNearChaosTrap(5) end,
+                prayer = Constants.CURSES.DEFLECT_MAGIC,
+                priority = 10,
+                duration = 3
+            }
+        }
     }
-
+]]
     self.state = {
         ---@diagnostic disable-next-line
         activePrayer = {},
@@ -199,20 +262,21 @@ end
 function PrayerFlicker:_scanAnimations(currentTick)
     for _, npc in ipairs(self.config.npcs) do
         local npcs = API.GetAllObjArray1({ npc.id }, 60, { 1 })
-
         for _, npcObj in ipairs(npcs) do
             if npcObj.Id then
                 for _, anim in ipairs(npc.animations) do
-                    if npcObj.Anim == anim.animId then
-                        table.insert(self.state.pendingActions, {
-                            type = "animation",
-                            npcId = npc.id,
-                            animId = anim.animId,
-                            prayer = anim.prayer,
-                            priority = anim.priority or 0,
-                            activateTick = currentTick + (anim.activationDelay or 0),
-                            expireTick = currentTick + (anim.activationDelay or 0) + (anim.duration or 1)
-                        })
+                    if not (anim.bypassCondition and anim.bypassCondition()) then
+                        if npcObj.Anim == anim.animId then
+                            table.insert(self.state.pendingActions, {
+                                type = "animation",
+                                npcId = npc.id,
+                                animId = anim.animId,
+                                prayer = anim.prayer,
+                                priority = anim.priority or 0,
+                                activateTick = currentTick + (anim.activationDelay or 0),
+                                expireTick = currentTick + (anim.activationDelay or 0) + (anim.duration or 1)
+                            })
+                        end
                     end
                 end
             end
@@ -225,15 +289,17 @@ end
 ---@param currentTick gameTick
 function PrayerFlicker:_scanConditionals(currentTick)
     for _, cond in ipairs(self.config.conditionals) do
-        if cond.condition() then
-            table.insert(self.state.pendingActions, {
-                type = "conditional",
-                condition = cond.condition,
-                prayer = cond.prayer,
-                priority = cond.priority,
-                activateTick = currentTick,
-                expireTick = currentTick + cond.duration
-            })
+        if not(cond.bypassCondition and cond.bypassCondition()) then
+            if cond.condition() then
+                table.insert(self.state.pendingActions, {
+                    type = "conditional",
+                    condition = cond.condition,
+                    prayer = cond.prayer,
+                    priority = cond.priority,
+                    activateTick = currentTick,
+                    expireTick = currentTick + cond.duration
+                })
+            end
         end
     end
 end
@@ -312,7 +378,7 @@ function PrayerFlicker:_switchPrayer(prayer)
 end
 
 ---disables active prayer or selected prayer
----@param prayer Prayer optional if you want to turn off a specific prayer
+---@param prayer? Prayer optional if you want to turn off a specific prayer
 ---@return boolean
 function PrayerFlicker:deactivatePrayer(prayer)
     local currentTick = API.Get_tick()
@@ -354,7 +420,6 @@ end
 function PrayerFlicker:tracking()
     local metrics = {
         { "Prayer Flicker:", "" },
-        { "- Prayers:", ""},
         { "-- Active",       self:_getCurrentPrayer() and self:_getCurrentPrayer().name or "None" },
         { "-- Last Used",    self.state.activePrayer and self.state.activePrayer.name or "None" },
         { "-- Required",     self:_determineActivePrayer(API.Get_tick()).name },
