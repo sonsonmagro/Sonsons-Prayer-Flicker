@@ -208,7 +208,7 @@ function PrayerFlicker:deactivatePrayer()
     Utils:log("Attempting to deactivate prayer", "debug") -- DEBUG
     local currentTick = API.Get_tick()
     local prayer = self:_getActivePrayer()
-    if not prayer.name or ((currentTick - self.state.lastPrayerTick < 1) and not self.state.activePrayer.name) then 
+    if not prayer.name or ((currentTick - self.state.activationTick < 1) and not self.state.activePrayer.name) then 
         Utils:log("Deactivation skipped: No active prayer or cooldown", "debug") -- DEBUG
         return false 
     end
@@ -222,7 +222,7 @@ function PrayerFlicker:deactivatePrayer()
     )
 
     if success then
-        self.state.lastPrayerTick = API.Get_tick()
+        self.state.activationTick = API.Get_tick()
         ---@diagnostic disable-next-line
         self.state.activePrayer = {}
         Utils:log("Prayer deactivated: " .. prayer.name, "info") -- DEBUG
