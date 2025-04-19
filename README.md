@@ -1,37 +1,23 @@
 # Sonson's Prayer Flicker
 
 ## Overview
-This class is designed for dynamic prayer switching based on various threat types.
+Flick your overhead prayers **automatically** based on real‑time projectile, animation, or custom conditions.
+The module lets you describe every “threat” once, rank it by priority, and the class will handle the rest— from precise activation delays to safely de‑activating your prayer when the danger is gone.
 
 ## Features
-- Automatic prayer switching based on multiple threat detection methods
-- Dynamic threat prioritization
-- Configurable prayer management for:
-  - NPC Animations
-  - Projectile Threats
-  - Conditional Game States
-- Customizable threat detection and prayer switching
-- Minimal performance overhead
-- Easy to configure for different boss fights and combat scenarios
+- Single `threats` list – handles projectiles, animations & custom conditions
 
-## Changelog
-### v1.0.2
-- Fixes and improvements to conditional threat detection
+- Built‑in prayer enums – quick access to all overheads
 
-### v1.0.1
-- Added a method to deactivate prayers: `PrayerFlicker:deactivatePrayer()`
-- `update()` and `_switchPrayer()` now return true when prayer is changed
+- Priority system – higher number wins overlapping threats
 
-### v1.0.0 - Initial Release
-- Initial release of Sonson's Prayer Flicker
-- Core prayer switching mechanics implemented
-- Support for NPC, Projectile, and Conditional threat detection
-- Configurable priority-based prayer management
+- Per‑threat `delay` & `duration` – tick‑perfect timing
 
-## TODO
-- Check for prayers on ability bar when initializing a new instance
----
-## Usage
+- `bypassCondition` hook – skip a threat when safe
+
+- Debug table – `tracking()` for on‑screen status
+
+## Installation
 
 ### Save File
 Make sure to save `prayer_flicker` in your `Lua_Scripts` folder.
@@ -43,84 +29,68 @@ local PrayerFlicker = require("prayer_flicker")
 
 ### Configuration Details
 
-#### A. Available Prayers
-Define the prayers you'll use:
+#### Build your configuration with all types of threats
 ```lua
-local prayers = {
-    { name = "Soul Split", buffId = 26033 },
-    { name = "Deflect Melee", buffId = 26040 },
-    { name = "Deflect Magic", buffId = 26041 },
-    { name = "Deflect Ranged", buffId = 26044 },
-    { name = "Deflect Necromancy", buffId = 30745 }
-}
-```
-
-#### B. NPCs and Animations
-```lua
-local npcs = {
-    {
-        id = 123,  -- npc id
-        animations = {
-            {
-                animId = 456,         -- animation id
-                prayer = {            -- prayer to switch to
-                    name = "Deflect Magic", 
-                    buffId = 26041
-                },
-                activationDelay = 1,  -- delay before prayer switch (in game ticks)
-                duration = 3,         -- no. of game ticks to keep prayer active
-                priority = 10         -- threat priority: bigger numbers get priority
-            }
-        }
-    }
-}
-```
-
-#### C. Projectiles Configuration
-```lua
-local projectiles = {
-    {
-        id = 789,                     -- projectile id
-        prayer = {
-            name = "Deflect Ranged", 
-            buffId = 26044
+local PRAYER_CONFIG = {
+    defaultPrayer = PrayerFlicker.CURSES.SOUL_SPLIT,
+    threats = {
+        {
+            name = "Standing on fire",
+            type = "Conditional",
+            priority = 10,
+            prayer = PrayerFlicker.CURSES.DEFLECT_MAGIC,
+            condition = function() return playerOnFire() end,
+            duration = 1,
+            delay = 0,
         },
-        bypassCondition = function()  -- optional: condition to ignore this projectile
-            return isDivertActive() or isResonanceActive()
-        end,
-        activationDelay = 0,          -- delay before prayer switch (in game ticks)
-        duration = 2,                 -- no. of game ticks to keep prayer active
-        priority = 5                  -- threat priority: bigger numbers get priority
+        {
+            name = "Ranged attacks",
+            type = "Projectile",
+            priority = 20,
+            id = { 123, 456, 789 } -- multiple ids supported now
+            prayer = PrayerFlicker.CURSES.DEFLECT_RANGED,
+            duration = 2,
+            delay = 1,
+        },
+        {
+            name = "Boss magic attacks",
+            type = "Animation",
+            priority = 30,
+            npcId = 12345
+            id = { 111, 222, 333 } -- multiple animation ids supported now
+            prayer = PrayerFlicker.CURSES.DEFLECT_MAGIC,
+            duration = 0,
+            delay = 2,
+        },
     }
 }
 ```
 
-#### D. Conditionals Configuration
-```lua
-local conditionals = {
-    {
-        condition = function()         -- custom condition function
-            return isNearChaosTrap()
-        end,
-        prayer = {
-            name = "Soul Split", 
-            buffId = 26033
-        },
-        priority = 15                  -- threat priority: bigger numbers get priority
-    }
-}
-```
+## Configuration Reference
+
+|Field | Type | Description|
+|--|--|--|
+|`defaultPrayer` |  `Prayer` | Overhead to fall back on when no threats are active.|
+|`threats` | `Threat[]` | List of every projectile / animation / conditional threat.|
+
+### `Threat`
+
+|Key | Type | Required | Notes|
+|--|--|--|--|
+|`name` | `string` | ✔ | Useful for debugging.|
+|`type` | `"Projectile"` or `"Animation"` or `"Conditional"` | ✔ | Determines which fields below are relevant.|
+|`prayer` | `Prayer` | ✔ | Prayer to activate for this threat.|
+|`priority` | `integer` | ✔ | Higher number wins when threats overlap.|
+|`delay` | `integer` | ✔ | Ticks to wait after detection before flicking.|
+|`duration` | `integer` | ✔ | How long the threat stays active after the flick.|
+|`id` | `integer` | ◐ | Projectile ID or animation ID, depending on type.|
+|`npcId` | `integer` | ◐ | Animation threats only – NPC whose animation is checked.|
+|`condition` | `function(): boolean` | ◐ | Conditional threats only – returns true when danger exists.|
+|`range` | `integer` | ✖ | Radius to search for the projectile/animation (default 60).|
+|`bypassCondition` | `function(): boolean` | ✖ | Return true to skip this threat on that tick (useful for Resonance, Reflect, etc.).|
 
 ### Create PrayerFlicker Instance
 ```lua
-local config = {
-    defaultPrayer = { name = "Soul Split", buffId = 26033 },
-    prayers = prayers,
-    projectiles = projectiles,
-    npcs = npcs,
-    conditionals = conditionals
-}
-
 local prayerFlicker = PrayerFlicker.new(config)
 ```
 
@@ -137,10 +107,3 @@ while API.Read_LoopyLoop() do
 end
 ```
 
-## Configuration Tips
-- `prayer`: `name` must match ability bar & `buffId` must match buffBar id
-- `bypassCondition`: Optional function to skip threat
-- `activationDelay`: Syncs prayer with game mechanics
-- `duration`: Controls threat active time
-- `priority`: Determines prayer switching order
-- It's okay to set `conditionals = {}` if you don't have any, same applies to `npcs` and `projectiles`
